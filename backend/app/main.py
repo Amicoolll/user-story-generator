@@ -88,21 +88,26 @@ def extract_text(upload: UploadFile) -> str:
     raise HTTPException(status_code=400, detail="Unsupported file format.")
 
 def build_prompt(scope_text: str) -> str:
-    """
-    Keep your current simple numbered-list format.
-    (We can switch to the strict Easy‑Peasy template later, as discussed.)
-    """
     return f"""
-Extract clear, testable user stories from the following scope of work.
-Return a numbered list only. Keep each story to one sentence.
+You are a business analyst. Convert the scope into structured Markdown:
+
+- Start each user story with a third‑level heading: `### User Story N: <Short Title>`
+- Then include this block:
+
+#### Acceptance Criteria:
+1. **<Heading>:** - <details...>
+2. ...
+
+#### Future Development:
+- <item>
+
+#### Notes:
+- <item>
 
 SCOPE OF WORK:
 {scope_text}
-
-FORMAT EXAMPLE:
-1. [Role] should be able to [capability] so that [benefit].
-2. ...
 """.strip()
+
 
 # ----------------------------
 # Routes

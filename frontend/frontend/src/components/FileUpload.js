@@ -1,32 +1,29 @@
+// src/components/FileUpload.js
 import React, { useState } from 'react';
-import { Button, Box, Typography } from '@mui/material';
+import { Box, Button, Typography } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 
 const FileUpload = ({ onStoriesGenerated, setLoading, setError }) => {
   const [file, setFile] = useState(null);
 
-  const handleChange = (e) => {
-    setFile(e.target.files[0]);
-  };
+  const handleChange = (e) => setFile(e.target.files[0]);
 
   const handleUpload = async () => {
     if (!file) return;
     setLoading(true);
     setError('');
-
     try {
       const formData = new FormData();
-      formData.append("file", file);
-
-      const res = await fetch("http://localhost:8000/generate-user-stories", {
-        method: "POST",
+      formData.append('file', file);
+      const res = await fetch('http://localhost:8000/generate-user-stories', {
+        method: 'POST',
         body: formData,
       });
-
       const data = await res.json();
-      onStoriesGenerated(data.user_stories || '');
+      if (data.user_stories) onStoriesGenerated(data.user_stories);
+      else setError('Failed to generate user stories.');
     } catch (err) {
-      setError("Error generating user stories.");
+      setError('Error connecting to server.');
     } finally {
       setLoading(false);
     }
@@ -35,50 +32,45 @@ const FileUpload = ({ onStoriesGenerated, setLoading, setError }) => {
   return (
     <Box
       sx={{
-        border: '2px dashed #ccc',
+        border: '2px dashed',
+        borderColor: 'divider',
         borderRadius: 3,
-        p: 5,
-        height: 220,
-        mt: 4,
-        textAlign: 'center',
-        backgroundColor: '#fafafa',
+        bgcolor: 'grey.50',
+        p: 4,
+        minHeight: 280,
         display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
         alignItems: 'center',
-        transition: 'background-color 0.3s',
-        '&:hover': {
-          backgroundColor: '#f0f0f0',
-        },
+        justifyContent: 'center',
+        textAlign: 'center',
+        transition: 'background-color .2s, border-color .2s',
+        '&:hover': { bgcolor: 'grey.100', borderColor: 'primary.light' },
       }}
     >
-      <CloudUploadIcon sx={{ fontSize: 48, mb: 1, color: '#777' }} />
-      <Typography variant="body1" gutterBottom>
-        Drag & Drop your document here
-      </Typography>
-      <Typography variant="caption" display="block" gutterBottom>
-        PDF or DOCX only
-      </Typography>
+      <Box>
+        <CloudUploadIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 1 }} />
+        <Typography variant="h6" sx={{ mb: 1 }}>
+          Drag & Drop your document here
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          PDF or DOCX only
+        </Typography>
 
-      <input type="file" id="fileInput" onChange={handleChange} hidden />
-      <label htmlFor="fileInput">
-        <Button variant="outlined" component="span" sx={{ mt: 2 }}>
-          {file ? file.name : 'Choose File'}
-        </Button>
-      </label>
-
-      <Box mt={2}>
-        <Button
-          variant="contained"
-          onClick={handleUpload}
-          disabled={!file}
-        >
-          Start Generating
-        </Button>
+        <input id="fileInput" type="file" accept=".pdf,.docx" hidden onChange={handleChange} />
+        <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
+          <Button variant="outlined" component="label" htmlFor="fileInput">
+            {file ? file.name : 'Choose File'}
+          </Button>
+          <Button
+            variant="contained"
+            disabled={!file}
+            onClick={handleUpload}
+          >
+            Start Generating
+          </Button>
+        </Box>
       </Box>
     </Box>
   );
 };
 
 export default FileUpload;
-
