@@ -1,3 +1,21 @@
-git rm --cached .env
-git rm --cached -r __pycache__
-git rm --cached -r node_modules
+# macOS system files
+.DS_Store
+
+# Environment variables
+.env
+backend/.env
+
+# Python cache & virtual env
+__pycache__/
+*.pyc
+venv/
+backend/venv/
+
+# Node modules
+node_modules/
+frontend/node_modules/
+frontend/frontend/node_modules/
+
+# Build output
+build/
+dist/
