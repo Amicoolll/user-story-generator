@@ -1,143 +1,84 @@
-// src/App.js
-import React, { useState } from 'react';
-import Navbar from './components/Navbar';
-import FileUpload from './components/FileUpload';
-import UserStoriesDisplay from './components/UserStoriesDisplay';
-import jsPDF from 'jspdf';
-
-import {
-  Container,
-  Typography,
-  Paper,
-  CircularProgress,
-  Alert,
-  Grid,
-  Box,
-  Button,
-  Snackbar
-} from '@mui/material';
-import MuiAlert from '@mui/material/Alert';
-
-import { Document, Packer, Paragraph, TextRun } from 'docx';
-import { saveAs } from 'file-saver';
+import React, { useState } from "react";
+import { ThemeProvider } from "@mui/material/styles";
+import CssBaseline from "@mui/material/CssBaseline";
+import { Container, Box, Typography } from "@mui/material";
+import { theme } from "./theme";
+import Navbar from "./components/Navbar";
+import FileUpload from "./components/FileUpload";
+import UserStoriesDisplay from "./components/UserStoriesDisplay";
 
 function App() {
-  const [userStories, setUserStories] = useState('');
+  const [stories, setStories] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [copied, setCopied] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleDownloadPDF = () => {
-    if (!userStories) return;
-    const doc = new jsPDF();
-    const lines = doc.splitTextToSize(userStories, 180);
-    doc.text(lines, 10, 10);
-    doc.save('user_stories.pdf');
-  };
+  // 🔹 Replace your old handleUpload with this one
+  const handleUpload = async (file) => {
+    setStories("");
+    setError("");
+    setLoading(true);
 
-  const handleDownloadDOCX = () => {
-    if (!userStories) return;
-    const lines = userStories.split('\n').filter(Boolean);
-    const doc = new Document({
-      sections: [
-        {
-          children: lines.map((line) =>
-            new Paragraph({ children: [new TextRun({ text: line })] })
-          ),
-        },
-      ],
-    });
-    Packer.toBlob(doc).then((blob) => saveAs(blob, 'user_stories.docx'));
-  };
+    try {
+      const form = new FormData();
+      form.append("file", file); // Must match FastAPI param
 
-  const handleCopy = () => {
-    if (!userStories) return;
-    navigator.clipboard.writeText(userStories);
-    setCopied(true);
+      const res = await fetch("http://localhost:8000/generate-user-stories", {
+        method: "POST",
+        body: form,
+      });
+
+      const raw = await res.text();
+      console.log("STATUS:", res.status, "RAW:", raw);
+
+      if (!res.ok) throw new Error(raw || `HTTP ${res.status}`);
+
+      let data = {};
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        /* if plain text, skip JSON parse */
+      }
+
+      const output =
+        data?.stories ??
+        data?.user_stories ??
+        data?.result ??
+        (typeof data === "string" ? data : raw);
+
+      setStories((output || "").trim());
+      if (!output) setError("No stories returned from server.");
+    } catch (e) {
+      setError(e.message || "Generation failed.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <>
-      <Navbar />
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <div className="ai-bg">
+        <Navbar />
+        <Container maxWidth="lg" sx={{ pt: { xs: 6, md: 12 }, pb: { xs: 6, md: 8 }, px: { xs: 2, sm: 3 } }}>
+          <Box textAlign="center" mb={6}>
+            <Typography sx={{ typography: { xs: "h4", sm: "h3", md: "h2" }, color: "text.primary" }} gutterBottom>
+              Upload Your Document & Let AI Generate Stories
+            </Typography>
+            <Typography variant="h6" color="text.secondary">
+              Powered by CogniHubAI’s advanced NLP engine
+            </Typography>
+          </Box>
 
-      <Container maxWidth="lg" sx={{ mt: 6, mb: 6 }}>
-        {/* Stack vertically */}
-        <Grid container direction="column" spacing={4}>
-          {/* Top: Upload */}
-          <Grid item xs={12}>
-            <Paper elevation={4} sx={{ p: 4, borderRadius: 3 }}>
-              <Typography variant="h5" fontWeight={700} gutterBottom>
-                Upload Scope of Work Document
-              </Typography>
+          {/* Pass the new handler here */}
+          <FileUpload onUpload={handleUpload} />
 
-              <FileUpload
-                onStoriesGenerated={setUserStories}
-                setLoading={setLoading}
-                setError={setError}
-              />
+          {loading && <Typography color="text.secondary" sx={{ mt: 2 }}>Generating…</Typography>}
+          {error && <Typography color="error" sx={{ mt: 2 }}>{error}</Typography>}
 
-              {loading && (
-                <Box mt={2}>
-                  <CircularProgress />
-                </Box>
-              )}
-
-              {error && (
-                <Box mt={2}>
-                  <Alert severity="error">{error}</Alert>
-                </Box>
-              )}
-            </Paper>
-          </Grid>
-
-          {/* Bottom: Stories */}
-          <Grid item xs={12}>
-            <Paper
-              elevation={4}
-              sx={{ p: 4, borderRadius: 3, minHeight: 420, display: 'flex', flexDirection: 'column' }}
-            >
-              <Typography variant="h5" fontWeight={700} gutterBottom>
-                Generated User Stories
-              </Typography>
-
-              {userStories ? (
-                <UserStoriesDisplay stories={userStories} />
-              ) : (
-                <Typography color="text.secondary">
-                  No user stories generated yet.
-                </Typography>
-              )}
-
-              {userStories && (
-                <Box mt={2} display="flex" gap={2} flexWrap="wrap">
-                  <Button variant="contained" onClick={handleDownloadPDF}>
-                    📄 Download as PDF
-                  </Button>
-                  <Button variant="contained" onClick={handleDownloadDOCX}>
-                    📄 Download as DOCX
-                  </Button>
-                  <Button variant="outlined" onClick={handleCopy}>
-                    📋 Copy to Clipboard
-                  </Button>
-                </Box>
-              )}
-            </Paper>
-          </Grid>
-        </Grid>
-      </Container>
-
-      {/* Copy success toast */}
-      <Snackbar
-        open={copied}
-        autoHideDuration={2000}
-        onClose={() => setCopied(false)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-      >
-        <MuiAlert elevation={6} variant="filled" severity="success">
-          Copied to clipboard!
-        </MuiAlert>
-      </Snackbar>
-    </>
+          <UserStoriesDisplay stories={stories} />
+        </Container>
+      </div>
+    </ThemeProvider>
   );
 }
 

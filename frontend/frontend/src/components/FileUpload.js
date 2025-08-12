@@ -1,76 +1,56 @@
 // src/components/FileUpload.js
-import React, { useState } from 'react';
-import { Box, Button, Typography } from '@mui/material';
-import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import { useState } from "react";
+import Box from "@mui/material/Box";
+import Paper from "@mui/material/Paper";
+import Typography from "@mui/material/Typography";
+import Button from "@mui/material/Button";
 
-const FileUpload = ({ onStoriesGenerated, setLoading, setError }) => {
+export default function FileUpload({ onUpload }) {
   const [file, setFile] = useState(null);
+  const [hover, setHover] = useState(false);
 
-  const handleChange = (e) => setFile(e.target.files[0]);
-
-  const handleUpload = async () => {
-    if (!file) return;
-    setLoading(true);
-    setError('');
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await fetch('http://localhost:8000/generate-user-stories', {
-        method: 'POST',
-        body: formData,
-      });
-      const data = await res.json();
-      if (data.user_stories) onStoriesGenerated(data.user_stories);
-      else setError('Failed to generate user stories.');
-    } catch (err) {
-      setError('Error connecting to server.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const pick = (e) => setFile(e.target.files[0] || null);
+  const drop = (e) => { e.preventDefault(); setFile(e.dataTransfer.files?.[0] || null); setHover(false); };
 
   return (
-    <Box
-      sx={{
-        border: '2px dashed',
-        borderColor: 'divider',
-        borderRadius: 3,
-        bgcolor: 'grey.50',
-        p: 4,
-        minHeight: 280,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        textAlign: 'center',
-        transition: 'background-color .2s, border-color .2s',
-        '&:hover': { bgcolor: 'grey.100', borderColor: 'primary.light' },
-      }}
-    >
-      <Box>
-        <CloudUploadIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 1 }} />
-        <Typography variant="h6" sx={{ mb: 1 }}>
+    <Paper elevation={0} sx={{
+      p:4,
+      bgcolor:"background.paper",
+      borderRadius:4,
+      border:"1px solid rgba(255,255,255,0.08)",
+      boxShadow: hover ? "0 0 0 1px rgba(59,130,246,.4), 0 30px 80px rgba(59,130,246,.12)" :
+                         "0 10px 30px rgba(0,0,0,.35)"
+    }}>
+      <Box onDragOver={(e)=>{e.preventDefault(); setHover(true);}}
+           onDragLeave={()=>setHover(false)} onDrop={drop}
+           sx={{ textAlign:"center", py:6, border:"2px dashed rgba(255,255,255,0.12)",
+                 borderRadius:3, transition:".2s", background: hover ? "rgba(59,130,246,.06)" : "transparent" }}>
+        <Box sx={{ fontSize:44, mb:2 }}>🧠</Box>
+        <Typography variant="h5" sx={{ mb:1, fontWeight:600 }}>
           Drag & Drop your document here
         </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          PDF or DOCX only
+        <Typography color="text.secondary" sx={{ mb:3 }}>
+          Works with PDF and DOCX
         </Typography>
 
-        <input id="fileInput" type="file" accept=".pdf,.docx" hidden onChange={handleChange} />
-        <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
-          <Button variant="outlined" component="label" htmlFor="fileInput">
-            {file ? file.name : 'Choose File'}
-          </Button>
-          <Button
-            variant="contained"
-            disabled={!file}
-            onClick={handleUpload}
-          >
-            Start Generating
-          </Button>
-        </Box>
-      </Box>
-    </Box>
-  );
-};
+        <input id="file" hidden type="file" accept=".pdf,.docx" onChange={pick} />
+        <Button component="label" htmlFor="file" variant="outlined" sx={{ mr:2 }}>
+          Choose File
+        </Button>
+        <Button
+          variant="contained"
+          disabled={!file}
+          onClick={()=>onUpload?.(file)}
+        >
+          Start Generating
+        </Button>
 
-export default FileUpload;
+        {file && (
+          <Typography sx={{ mt:2 }} color="text.secondary">
+            Selected: {file.name}
+          </Typography>
+        )}
+      </Box>
+    </Paper>
+  );
+}
