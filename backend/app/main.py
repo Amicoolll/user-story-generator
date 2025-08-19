@@ -1,6 +1,6 @@
 # main.py (FastAPI backend)
-# backend/app/main.py
-from fastapi import FastAPI, UploadFile, File, HTTPException
+# backend/App/main.py
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 import os
 import tempfile
@@ -8,6 +8,11 @@ import docx2txt
 import fitz  # PyMuPDF
 import openai
 from dotenv import load_dotenv
+
+# --- NEW: auth + db imports ---
+from .auth import router as auth_router, get_current_user
+from .database import Base, engine, get_db
+from .models import User  # for typing & future use
 
 # ----------------------------
 # Env & OpenAI setup
@@ -17,7 +22,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
     raise RuntimeError("OPENAI_API_KEY not set in .env file")
 
-openai.api_key = OPENAI_API_KEY  # legacy OpenAI SDK style (works with ChatCompletion)
+openai.api_key = OPENAI_API_KEY  # legacy OpenAI SDK style (ChatCompletion)
 
 # ----------------------------
 # FastAPI app & CORS
@@ -26,11 +31,25 @@ app = FastAPI(title="User Story Generator API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # TODO: lock to your frontend origin in prod
+    # TIP: lock this down to your frontend origin(s) in prod
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        # add your deployed frontend origin here
+        "*",  # keep during dev only
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# --- NEW: create DB tables on startup ---
+@app.on_event("startup")
+def on_startup():
+    Base.metadata.create_all(bind=engine)
+
+# --- NEW: mount auth routes under /auth ---
+app.include_router(auth_router)
 
 # ----------------------------
 # Utilities
@@ -91,7 +110,7 @@ def build_prompt(scope_text: str) -> str:
     return f"""
 You are a business analyst. Convert the scope into structured Markdown:
 
-- Start each user story with a third‑level heading: `### User Story N: <Short Title>`
+- Start each user story with a third-level heading: `### User Story N: <Short Title>`
 - Then include this block:
 
 #### Acceptance Criteria:
@@ -116,8 +135,14 @@ SCOPE OF WORK:
 def health():
     return {"status": "ok"}
 
+# --- CHANGED: protect this route with JWT ---
 @app.post("/generate-user-stories")
-async def generate_user_stories(file: UploadFile = File(...)):
+async def generate_user_stories(
+    file: UploadFile = File(...),
+    # db available if you want to save ownership/usage later
+    db = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     # 1) Validate & extract text
     text = extract_text(file)
     if len(text) < 20:
@@ -138,7 +163,11 @@ async def generate_user_stories(file: UploadFile = File(...)):
             max_tokens=1500,
         )
         user_stories = resp["choices"][0]["message"]["content"].strip()
-        return {"user_stories": user_stories}
+
+        # Example: you can store metadata using current_user.id if needed
+        # save_generation(db, owner_id=current_user.id, content=user_stories)
+
+        return {"user_stories": user_stories, "user_id": current_user.id}
     except Exception as e:
         # Surface a clean error to the frontend
         raise HTTPException(status_code=500, detail=f"LLM generation failed: {e}")
