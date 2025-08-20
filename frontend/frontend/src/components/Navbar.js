@@ -1,6 +1,5 @@
 // src/components/Navbar.js
-// src/components/Navbar.js
-import { useState } from "react";
+import React, { useState } from "react";
 import AppBar from "@mui/material/AppBar";
 import Toolbar from "@mui/material/Toolbar";
 import Typography from "@mui/material/Typography";
@@ -10,14 +9,26 @@ import IconButton from "@mui/material/IconButton";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
 import MenuIcon from "@mui/icons-material/Menu";
-import AuthDialog from "./Auth/AuthDialog"; // <-- make sure file is src/components/Auth/AuthDialog.js
+import AuthDialog from "./Auth/AuthDialog"; // keep this path
+import { useAuth } from "../context/AuthContext";
 
 export default function Navbar() {
   const [menuEl, setMenuEl] = useState(null);
   const [authOpen, setAuthOpen] = useState(false);
+  const { user, isAuthed, logout } = useAuth();
 
   const openMenu = (e) => setMenuEl(e.currentTarget);
   const closeMenu = () => setMenuEl(null);
+
+  const handleLoginClick = () => {
+    closeMenu();
+    setAuthOpen(true);
+  };
+
+  const handleLogoutClick = () => {
+    closeMenu();
+    logout();
+  };
 
   return (
     <>
@@ -51,16 +62,33 @@ export default function Navbar() {
           <Box sx={{ flexGrow: 1 }} />
 
           {/* Desktop actions */}
-          <Box sx={{ display: { xs: "none", md: "flex" }, gap: 1 }}>
+          <Box sx={{ display: { xs: "none", md: "flex" }, gap: 1, alignItems: "center" }}>
             <Button variant="outlined" size="small">Home</Button>
-            <Button
-              variant="contained"
-              size="small"
-              onClick={() => setAuthOpen(true)}
-              sx={{ px: 2.5, borderRadius: 999 }}
-            >
-              Login
-            </Button>
+
+            {isAuthed ? (
+              <>
+                <Typography variant="body2" sx={{ mx: 1, color: "text.secondary" }}>
+                  Hi, {user?.name || "User"}
+                </Typography>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={handleLogoutClick}
+                  sx={{ px: 2.5, borderRadius: 999 }}
+                >
+                  Logout
+                </Button>
+              </>
+            ) : (
+              <Button
+                variant="contained"
+                size="small"
+                onClick={handleLoginClick}
+                sx={{ px: 2.5, borderRadius: 999 }}
+              >
+                Login
+              </Button>
+            )}
           </Box>
 
           {/* Mobile menu */}
@@ -73,30 +101,21 @@ export default function Navbar() {
           </IconButton>
           <Menu anchorEl={menuEl} open={Boolean(menuEl)} onClose={closeMenu}>
             <MenuItem onClick={closeMenu}>Home</MenuItem>
-            <MenuItem
-              onClick={() => {
-                closeMenu();
-                setAuthOpen(true);
-              }}
-            >
-              Login
-            </MenuItem>
+
+            {isAuthed ? (
+              <>
+                <MenuItem disabled>Hi, {user?.name || "User"}</MenuItem>
+                <MenuItem onClick={handleLogoutClick}>Logout</MenuItem>
+              </>
+            ) : (
+              <MenuItem onClick={handleLoginClick}>Login</MenuItem>
+            )}
           </Menu>
         </Toolbar>
       </AppBar>
 
-      {/* Auth modal */}
-      <AuthDialog
-        open={authOpen}
-        onClose={() => setAuthOpen(false)}
-        mode="login"
-        onGoogle={() => console.log("Google auth")}
-        onLinkedIn={() => console.log("LinkedIn auth")}
-        onSubmit={(payload) => {
-          console.log("Auth submit", payload); // wire to FastAPI later
-          setAuthOpen(false);
-        }}
-      />
+      {/* Auth modal: uses context-powered AuthDialog (no props like onSubmit needed) */}
+      <AuthDialog open={authOpen} onClose={() => setAuthOpen(false)} />
     </>
   );
 }

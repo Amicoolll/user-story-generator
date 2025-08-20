@@ -1,104 +1,86 @@
-// App.js
-import { useState, useRef } from "react";
+// src/App.js
+import React, { useEffect, useState } from "react";
 import { ThemeProvider } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
 import { Container, Box, Typography } from "@mui/material";
 import { theme } from "./theme";
+
+// Updated classes/modules (already in your project)
+import AuthProvider from "./context/AuthContext";
 import Navbar from "./components/Navbar";
 import FileUpload from "./components/FileUpload";
 import UserStoriesDisplay from "./components/UserStoriesDisplay";
-import AuthDialog from "./components/Auth/AuthDialog"; // <- move modal here (not in Navbar)
+import AuthDialog from "./components/Auth/AuthDialog";
 
 export default function App() {
-  const [stories, setStories] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  // Central auth modal stays here (NOT inside Navbar)
   const [authOpen, setAuthOpen] = useState(false);
-  const [isAuthed, setIsAuthed] = useState(!!localStorage.getItem("ch_token"));
-  const pendingActionRef = useRef(null); // to run after login
+  const [stories, setStories] = useState("");
 
-  // ---- backend call ----
-  const handleUpload = async (file) => {
-    setStories(""); setError(""); setLoading(true);
-    try {
-      const form = new FormData();
-      form.append("file", file);
-      const res = await fetch("http://localhost:8000/generate-user-stories", { method: "POST", body: form });
-      const raw = await res.text();
-      if (!res.ok) throw new Error(raw || `HTTP ${res.status}`);
-      let data = {}; try { data = JSON.parse(raw); } catch {}
-      const output = data?.stories ?? data?.user_stories ?? data?.result ?? (typeof data === "string" ? data : raw);
-      setStories((output || "").trim());
-      if (!output) setError("No stories returned from server.");
-    } catch (e) {
-      setError(e.message || "Generation failed.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Let anything (api client / components) open the auth modal
+  useEffect(() => {
+    const openAuth = () => setAuthOpen(true);
+    window.addEventListener("auth:unauthorized", openAuth);
+    window.addEventListener("open-auth", openAuth);
+    return () => {
+      window.removeEventListener("auth:unauthorized", openAuth);
+      window.removeEventListener("open-auth", openAuth);
+    };
+  }, []);
 
-  // ---- auth guard wrapper ----
-  const requireAuth = (fn) => (...args) => {
-    if (isAuthed) return fn(...args);
-    // store the action to run after login, then open modal
-    pendingActionRef.current = () => fn(...args);
-    setAuthOpen(true);
-  };
-
-  // ---- handle modal submit (fake login for now) ----
-  const handleAuthSubmit = ({ mode, email }) => {
-    // TODO: replace with real API later
-    localStorage.setItem("ch_token", "demo-token");
-    setIsAuthed(true);
-    setAuthOpen(false);
-    // run pending action if any
-    if (pendingActionRef.current) {
-      const action = pendingActionRef.current;
-      pendingActionRef.current = null;
-      action();
-    }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem("ch_token");
-    setIsAuthed(false);
-  };
-
+  // Wrapper around logout: also clears stories
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <div className="ai-bg">
-        <Navbar onLoginClick={() => setAuthOpen(true)} isAuthed={isAuthed} onLogoutClick={handleLogout} />
+      <AuthProvider onRequireAuth={() => setAuthOpen(true)}>
+        <div className="ai-bg">
+          {/* NAVBAR – same look/feel, uses context internally */}
+          <Navbar onLoginClick={() => setAuthOpen(true)} />
 
-        <Container maxWidth="lg" sx={{ pt: { xs: 6, md: 12 }, pb: { xs: 6, md: 8 }, px: { xs: 2, sm: 3 } }}>
-          <Box textAlign="center" mb={6}>
-            <Typography sx={{ typography: { xs: "h4", sm: "h3", md: "h2" }, color: "text.primary" }} gutterBottom>
-              Upload Your Document & Let AI Generate Stories
-            </Typography>
-            <Typography variant="h6" color="text.secondary">
-              Powered by CogniHubAI’s advanced NLP engine
-            </Typography>
+          {/* HERO – keep your original headline and vibe */}
+          <Box
+            component="section"
+            sx={{
+              pt: { xs: 6, md: 12 },
+              pb: { xs: 4, md: 6 },
+              textAlign: "center",
+              background:
+                "radial-gradient(1200px 400px at 50% -50%, rgba(82,139,255,0.12), transparent), radial-gradient(1200px 400px at 50% -100%, rgba(34,211,238,0.08), transparent)",
+            }}
+          >
+            <Container maxWidth="md">
+              <Typography
+                sx={{
+                  typography: { xs: "h4", sm: "h3", md: "h2" },
+                  color: "text.primary",
+                  fontWeight: 800,
+                }}
+                gutterBottom
+              >
+                Upload Your Document & Let AI Generate Stories
+              </Typography>
+              <Typography variant="h6" color="text.secondary">
+                Powered by CogniHubAI’s advanced NLP engine
+              </Typography>
+            </Container>
           </Box>
+          {/* MAIN – keep spacing */}
+          <Container maxWidth="lg" sx={{ pb: { xs: 6, md: 8 }, px: { xs: 2, sm: 3 } }}>
+            {/* IMPORTANT:
+               FileUpload MUST call `openLogin()` when unauthenticated,
+               and dispatch `auth:unauthorized` on a 401.
+               That restores the popup behavior. */}
+            <Box sx={{ mb: 3 }}>
+              <FileUpload onStories={setStories} openLogin={() => setAuthOpen(true)} />
+            </Box>
 
-          {/* Gate the action: if not authed, open login modal */}
-          <FileUpload onUpload={requireAuth(handleUpload)} onRequireAuth={() => setAuthOpen(true)} />
+            <UserStoriesDisplay stories={stories} />
+          </Container>
 
-          {loading && <Typography color="text.secondary" sx={{ mt: 2 }}>Generating…</Typography>}
-          {error && <Typography color="error" sx={{ mt: 2 }}>{error}</Typography>}
-
-          <UserStoriesDisplay stories={stories} />
-        </Container>
-
-        {/* Central auth modal */}
-        <AuthDialog
-          open={authOpen}
-          onClose={() => setAuthOpen(false)}
-          mode="login"
-          onGoogle={() => console.log("Google auth")}
-          onLinkedIn={() => console.log("LinkedIn auth")}
-          onSubmit={handleAuthSubmit}
-        />
-      </div>
+          {/* CENTRAL AUTH MODAL */}
+          <AuthDialog open={authOpen} onClose={() => setAuthOpen(false)} />
+        </div>
+      </AuthProvider>
     </ThemeProvider>
   );
 }
